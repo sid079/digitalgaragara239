@@ -1,89 +1,33 @@
 # Strike World — Digital Lottery Machine
 
-A full-stack web application for the Strike World booth at ComicCon Mumbai. Runs on 5 tablets simultaneously with real-time inventory sync.
+A prize-lottery system I built on my own for MIXI's Strike World booth at Comic Con Mumbai (10k+ visitors). Five tablets ran it side by side at the booth, all drawing from one shared, live prize inventory.
 
-## Tech Stack
+## The problem
 
-- **Frontend**: React + Vite, React Router v6, Tailwind CSS
-- **Backend**: Supabase (PostgreSQL + Realtime)
-- **Deployment**: Static (Vercel / Netlify)
+Visitors spun a slot-machine-style lottery on any of five tablets to win merchandise. Every tablet drew from the same limited stock, so two tablets could pick the same last item at the same moment and both promise a prize that didn't exist. Staff also needed to change stock and odds during the event without restarting anything.
 
-## Quick Start
+## How it works
 
-### 1. Supabase Setup
+- **No double-claiming.** Each prize row carries a version number. A win only counts if an atomic database update (`decrement_stock`) finds the version it expects and stock above zero. If another tablet got there first, the tablet quietly draws again from the refreshed pool.
+- **Live sync.** Every tablet subscribes to inventory changes (Supabase Realtime) and refreshes its prize pool within 1–2 seconds of any spin or staff edit.
+- **Tiers.** Each tablet is assigned a tier (A/B/C) and only offers that tier's prizes. Prizes are drawn at random, weighted by odds staff can set.
+- **Staff console.** A PIN-protected dashboard to add products, set stock and odds, see sold-out alerts, and export the spin log as CSV.
+- **Bug found and fixed:** stock was being decremented more than once per spin.
 
-1. Create a new Supabase project at [supabase.com](https://supabase.com)
-2. Go to **SQL Editor** and run the contents of `supabase-schema.sql`
-3. Enable **Realtime** on the `lottery_settings` table (should be done by the schema, but verify in Dashboard → Database → Replication)
-4. Copy your project URL and anon key from **Settings → API**
+| Tier | Tablets | Prizes |
+|------|---------|--------|
+| C | C-1, C-2 | Regular merch |
+| B | B-1, B-2 | Game merch |
+| A | A-1 | Multi-event prizes |
 
-### 2. Environment Variables
+## Tech stack
 
-```bash
-cp .env.example .env
-```
+React + Vite, React Router, Tailwind CSS · Supabase (PostgreSQL, Realtime, row-level security) · static deployment (Vercel)
 
-Edit `.env` and fill in your Supabase credentials:
+## Run it yourself
 
-```
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key-here
-VITE_ADMIN_PIN=5544
-```
+1. Create a Supabase project and run `supabase-schema.sql` in the SQL editor. Check that Realtime is enabled on `lottery_settings`.
+2. `cp .env.example .env` and fill in `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` and your own `VITE_ADMIN_PIN`.
+3. `npm install && npm run dev`. To deploy, run `npm run build` and serve `dist/`.
 
-### 3. Mascot Images
-
-Place the two mascot images in the `public/` folder:
-- `public/mascot-normal.png` — calm mascot (used on idle/ready states)
-- `public/mascot-angry.png` — excited mascot with fire (used on win states)
-
-Both images should have dark/black backgrounds for use with `mix-blend-mode: screen`.
-
-### 4. Install & Run
-
-```bash
-npm install
-npm run dev
-```
-
-### 5. Build for Production
-
-```bash
-npm run build
-```
-
-Deploy the `dist/` folder to Vercel, Netlify, or any static host.
-
-## App Screens
-
-### Setup Screen (`/`)
-Staff-facing setup where you pick a Grade (A/B/C) and Device number. Saves to localStorage so tablets remember their assignment across refreshes.
-
-### Lottery Display (`/lottery`)
-Full-screen visitor-facing lottery machine with:
-- Slot-machine reel animation
-- Weighted random prize selection
-- Win screen with confetti and mascot
-- Real-time stock sync across all tablets
-
-### Admin Console (`/admin`)
-PIN-protected (default: `5544`) staff dashboard with:
-- **Dashboard**: Overview stats, sold-out alerts, per-grade summaries
-- **Products**: Add/edit/delete merchandise items
-- **Lottery Settings**: Configure stock quantities, probability weights, active status
-- **Lottery Log**: View spin history with date/machine filters and CSV export
-
-## Tablet Configuration
-
-| Grade | Devices | Products |
-|-------|---------|----------|
-| C | C-1, C-2 | Regular Merch |
-| B | B-1, B-2 | Game Merch |
-| A | A-1 | Multi Event |
-
-## Architecture Notes
-
-- **Grade Isolation**: Each tablet only shows products from its configured grade
-- **Optimistic Concurrency**: Stock decrements use a version field to prevent double-claiming when multiple tablets spin simultaneously
-- **Realtime Sync**: All tablets subscribe to `lottery_settings` changes and refresh their pool within ~1-2 seconds
-- **Offline Recovery**: If a version conflict occurs during decrement, the system silently picks a new winner from the refreshed pool
+Screens: `/` (staff assign each tablet's tier and number), `/lottery` (visitor-facing machine), `/admin` (staff console).
